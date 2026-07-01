@@ -11,11 +11,11 @@ type User struct {
 	age  int
 }
 
-type UserSlice []User
+type UsersSlice []User
 
-func myHttpHandler(writer http.ResponseWriter, req *http.Request) {
-	fmt.Println("handler is executing")
-	fmt.Fprintln(writer, "<h1> jaja</h1>")
+func getUsers(writer http.ResponseWriter, req *http.Request, data UsersSlice) {
+	fmt.Println("getusers endpoint is requested")
+	fmt.Fprintln(writer, data)
 }
 
 func main() {
@@ -32,11 +32,13 @@ func main() {
 		name: "nameuser2",
 	}
 
-	usersSlice := UserSlice{user1, user2}
+	usersSlice := UsersSlice{user1, user2}
 
 	fmt.Printf("the value of `usersSlice` is %+v\n", usersSlice)
 
-	http.HandleFunc("/somepath", myHttpHandler)
+	http.HandleFunc("/getusers", func(writer http.ResponseWriter, req *http.Request) {
+		getUsers(writer, req, usersSlice)
+	})
 	http.ListenAndServe(":8080", nil)
 	fmt.Println("server is listening")
 
