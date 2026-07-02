@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 )
 
@@ -18,17 +20,18 @@ type ErrorResponse struct {
 	Error string
 }
 
+var usersSlice UsersSlice
+
 func createErrorResponse(err error) ErrorResponse {
 	return ErrorResponse{Error: err.Error()}
 }
 
-func getUsers(writer http.ResponseWriter, req *http.Request, data UsersSlice) {
-	fmt.Println("getusers endpoint is requested")
-
-	dataJson, err := json.Marshal(data)
-	// err = errors.New("Something went wronggg")
-
+func getUsers(writer http.ResponseWriter, req *http.Request) {
+	fmt.Println("/getusers endpoint is requested")
 	writer.Header().Set("Content-type", "application/json")
+
+	dataJson, err := json.Marshal(usersSlice)
+	// err = errors.New("Something went wronggg")
 
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
@@ -39,26 +42,38 @@ func getUsers(writer http.ResponseWriter, req *http.Request, data UsersSlice) {
 	writer.Write(dataJson)
 }
 
+func createUser(writer http.ResponseWriter, req *http.Request) {
+	fmt.Println("/createuser endpoint is requested")
+	writer.Header().Set("Content-type", "application/json")
+
+	var newUser User
+	err := json.NewDecoder(req.Body).Decode(&newUser)
+
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(writer).Encode(createErrorResponse(err))
+		return
+	}
+
+	if newUser.Name == "" {
+		writer.WriteHeader(http.StatusBadRequest)
+		err = errors.New("Failed to create the user, 'name' is not provided")
+		json.NewEncoder(writer).Encode(createErrorResponse(err))
+		return
+	}
+
+	newUser.ID = rand.Intn(1000000)
+	usersSlice = append(usersSlice, newUser)
+
+	_ = json.NewEncoder(writer).Encode(newUser)
+}
+
 func main() {
 	fmt.Print("started\n")
 
-	user1 := User{
-		1,
-		"nameuser1",
-		30,
-	}
+	http.HandleFunc("POST /createuser", createUser)
+	http.HandleFunc("GET /getusers", getUsers)
 
-	user2 := User{
-		ID:   2,
-		Name: "nameuser2",
-	}
-
-	usersSlice := UsersSlice{user1, user2}
-
-	http.HandleFunc("/getusers", func(writer http.ResponseWriter, req *http.Request) {
-		getUsers(writer, req, usersSlice)
-	})
 	http.ListenAndServe(":8080", nil)
 	fmt.Println("server is listening")
-
 }
