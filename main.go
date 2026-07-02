@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strconv"
 )
 
 type User struct {
@@ -68,10 +69,48 @@ func createUser(writer http.ResponseWriter, req *http.Request) {
 	_ = json.NewEncoder(writer).Encode(newUser)
 }
 
+func findUserIndex(users UsersSlice, userId int) (bool, int) {
+	for index, user := range users {
+		if user.ID == userId {
+			return true, index
+		}
+	}
+
+	return false, -1
+}
+
+func deleteUser(writer http.ResponseWriter, req *http.Request) {
+	fmt.Println("/deleteuser endpoint is requested")
+	writer.Header().Set("Content-Type", "application/json")
+
+	userId := req.PathValue("userId")
+	id, err := strconv.Atoi(userId)
+
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(writer).Encode(createErrorResponse(err))
+		return
+	}
+
+	found, userIndex := findUserIndex(usersSlice, id)
+
+	if !found {
+		writer.WriteHeader(http.StatusNotFound)
+		err = fmt.Errorf("There is no user with id %d", id)
+		json.NewEncoder(writer).Encode(createErrorResponse(err))
+		return
+	}
+
+	usersSlice = append(usersSlice[:userIndex], usersSlice[userIndex+1:]...)
+
+	_ = json.NewEncoder(writer).Encode(map[string]string{"message": fmt.Sprintf("User with id %d is deleted", id)})
+}
+
 func main() {
 	fmt.Print("started\n")
 
 	http.HandleFunc("POST /createuser", createUser)
+	http.HandleFunc("DELETE /deleteuser/{userId}", deleteUser)
 	http.HandleFunc("GET /getusers", getUsers)
 
 	http.ListenAndServe(":8080", nil)
