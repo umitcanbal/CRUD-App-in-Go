@@ -1,21 +1,42 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
 
 type User struct {
-	id   int
-	name string
-	age  int
+	ID   int
+	Name string
+	Age  int
 }
 
 type UsersSlice []User
 
+type ErrorResponse struct {
+	Error string
+}
+
+func createErrorResponse(err error) ErrorResponse {
+	return ErrorResponse{Error: err.Error()}
+}
+
 func getUsers(writer http.ResponseWriter, req *http.Request, data UsersSlice) {
 	fmt.Println("getusers endpoint is requested")
-	fmt.Fprintln(writer, data)
+
+	dataJson, err := json.Marshal(data)
+	// err = errors.New("Something went wronggg")
+
+	writer.Header().Set("Content-type", "application/json")
+
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(writer).Encode(createErrorResponse(err))
+		return
+	}
+
+	writer.Write(dataJson)
 }
 
 func main() {
@@ -28,13 +49,11 @@ func main() {
 	}
 
 	user2 := User{
-		id:   2,
-		name: "nameuser2",
+		ID:   2,
+		Name: "nameuser2",
 	}
 
 	usersSlice := UsersSlice{user1, user2}
-
-	fmt.Printf("the value of `usersSlice` is %+v\n", usersSlice)
 
 	http.HandleFunc("/getusers", func(writer http.ResponseWriter, req *http.Request) {
 		getUsers(writer, req, usersSlice)
