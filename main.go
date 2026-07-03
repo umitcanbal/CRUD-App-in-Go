@@ -1,12 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type User struct {
@@ -21,15 +24,34 @@ type ErrorResponse struct {
 	Error string
 }
 
-var usersSlice UsersSlice
+var db *sql.DB
 
 func createErrorResponse(err error) ErrorResponse {
 	return ErrorResponse{Error: err.Error()}
 }
 
+func fetchUsers() UsersSlice {
+	var usersSlice UsersSlice
+
+	rows, _ := db.Query("SELECT id, name, age FROM users")
+	defer rows.Close()
+
+	for {
+		if !rows.Next() {
+			break
+		}
+		var user User
+		rows.Scan(&user.ID, &user.Name, &user.Age)
+		usersSlice = append(usersSlice, user)
+	}
+
+	return usersSlice
+}
+
 func getUsers(writer http.ResponseWriter, req *http.Request) {
 	fmt.Println("/getusers endpoint is requested")
 	writer.Header().Set("Content-type", "application/json")
+	var usersSlice = fetchUsers()
 
 	dataJson, err := json.Marshal(usersSlice)
 	// err = errors.New("Something went wronggg")
@@ -64,19 +86,24 @@ func createUser(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	newUser.ID = rand.Intn(1000000)
-	usersSlice = append(usersSlice, newUser)
+
+	db.Exec("INSERT INTO users (id, name, age) VALUES ($1, $2, $3)",
+		newUser.ID,
+		newUser.Name,
+		newUser.Age,
+	)
 
 	_ = json.NewEncoder(writer).Encode(newUser)
 }
 
-func findUserIndex(users UsersSlice, userId int) (bool, int) {
-	for index, user := range users {
+func userExists(users UsersSlice, userId int) bool {
+	for _, user := range users {
 		if user.ID == userId {
-			return true, index
+			return true
 		}
 	}
 
-	return false, -1
+	return false
 }
 
 func deleteUser(writer http.ResponseWriter, req *http.Request) {
@@ -92,7 +119,8 @@ func deleteUser(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	found, userIndex := findUserIndex(usersSlice, id)
+	var usersSlice = fetchUsers()
+	found := userExists(usersSlice, id)
 
 	if !found {
 		writer.WriteHeader(http.StatusNotFound)
@@ -101,7 +129,7 @@ func deleteUser(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	usersSlice = append(usersSlice[:userIndex], usersSlice[userIndex+1:]...)
+	db.Exec("DELETE FROM users WHERE id = $1", userId)
 
 	_ = json.NewEncoder(writer).Encode(map[string]string{"message": fmt.Sprintf("User with id %d is deleted", id)})
 }
@@ -118,7 +146,8 @@ func updateUser(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	found, userIndex := findUserIndex(usersSlice, updateUser.ID)
+	var usersSlice = fetchUsers()
+	found := userExists(usersSlice, updateUser.ID)
 	if !found {
 		writer.WriteHeader(http.StatusNotFound)
 		err := fmt.Errorf("There is no user with id %d", updateUser.ID)
@@ -126,7 +155,7 @@ func updateUser(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	usersSlice[userIndex] = updateUser
+	db.Exec("UPDATE users SET name = $1, age = $2 WHERE id = $3", updateUser.Name, updateUser.Age, updateUser.ID)
 	_ = json.NewEncoder(writer).Encode(updateUser)
 }
 
@@ -137,6 +166,21 @@ func main() {
 	http.HandleFunc("DELETE /deleteuser/{userId}", deleteUser)
 	http.HandleFunc("GET /getusers", getUsers)
 	http.HandleFunc("PUT /updateuser", updateUser)
+
+	var err error
+	db, err = sql.Open("pgx", "postgres://localhost:5432/myapp")
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	err = db.Ping()
+	if err == nil {
+		fmt.Println("DB connection is alive")
+	} else {
+		fmt.Println(err.Error())
+		return
+	}
 
 	http.ListenAndServe(":8080", nil)
 	fmt.Println("server is listening")
