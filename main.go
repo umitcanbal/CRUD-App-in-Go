@@ -81,7 +81,12 @@ func createUser(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	newUser.ID = rand.Intn(1000000)
-	usersSlice = append(usersSlice, newUser)
+
+	db.Exec("INSERT INTO users (id, name, age) VALUES ($1, $2, $3)",
+		newUser.ID,
+		newUser.Name,
+		newUser.Age,
+	)
 
 	_ = json.NewEncoder(writer).Encode(newUser)
 }
