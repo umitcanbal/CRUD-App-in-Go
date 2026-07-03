@@ -31,9 +31,7 @@ func createErrorResponse(err error) ErrorResponse {
 	return ErrorResponse{Error: err.Error()}
 }
 
-func getUsers(writer http.ResponseWriter, req *http.Request) {
-	fmt.Println("/getusers endpoint is requested")
-	writer.Header().Set("Content-type", "application/json")
+func fetchUsers() UsersSlice {
 	var usersSlice UsersSlice
 
 	rows, _ := db.Query("SELECT id, name, age FROM users")
@@ -47,6 +45,14 @@ func getUsers(writer http.ResponseWriter, req *http.Request) {
 		rows.Scan(&user.ID, &user.Name, &user.Age)
 		usersSlice = append(usersSlice, user)
 	}
+
+	return usersSlice
+}
+
+func getUsers(writer http.ResponseWriter, req *http.Request) {
+	fmt.Println("/getusers endpoint is requested")
+	writer.Header().Set("Content-type", "application/json")
+	var usersSlice = fetchUsers()
 
 	dataJson, err := json.Marshal(usersSlice)
 	// err = errors.New("Something went wronggg")
@@ -114,7 +120,8 @@ func deleteUser(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	found, userIndex := findUserIndex(usersSlice, id)
+	var usersSlice = fetchUsers()
+	found, _ := findUserIndex(usersSlice, id)
 
 	if !found {
 		writer.WriteHeader(http.StatusNotFound)
@@ -123,7 +130,7 @@ func deleteUser(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	usersSlice = append(usersSlice[:userIndex], usersSlice[userIndex+1:]...)
+	db.Exec("DELETE FROM users WHERE id = $1", userId)
 
 	_ = json.NewEncoder(writer).Encode(map[string]string{"message": fmt.Sprintf("User with id %d is deleted", id)})
 }
