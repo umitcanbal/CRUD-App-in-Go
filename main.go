@@ -1,12 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type User struct {
@@ -22,6 +25,7 @@ type ErrorResponse struct {
 }
 
 var usersSlice UsersSlice
+var db *sql.DB
 
 func createErrorResponse(err error) ErrorResponse {
 	return ErrorResponse{Error: err.Error()}
@@ -30,6 +34,19 @@ func createErrorResponse(err error) ErrorResponse {
 func getUsers(writer http.ResponseWriter, req *http.Request) {
 	fmt.Println("/getusers endpoint is requested")
 	writer.Header().Set("Content-type", "application/json")
+	var usersSlice UsersSlice
+
+	rows, _ := db.Query("SELECT id, name, age FROM users")
+	defer rows.Close()
+
+	for {
+		if !rows.Next() {
+			break
+		}
+		var user User
+		rows.Scan(&user.ID, &user.Name, &user.Age)
+		usersSlice = append(usersSlice, user)
+	}
 
 	dataJson, err := json.Marshal(usersSlice)
 	// err = errors.New("Something went wronggg")
@@ -137,6 +154,21 @@ func main() {
 	http.HandleFunc("DELETE /deleteuser/{userId}", deleteUser)
 	http.HandleFunc("GET /getusers", getUsers)
 	http.HandleFunc("PUT /updateuser", updateUser)
+
+	var err error
+	db, err = sql.Open("pgx", "postgres://localhost:5432/myapp")
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	err = db.Ping()
+	if err == nil {
+		fmt.Println("DB connection is alive")
+	} else {
+		fmt.Println(err.Error())
+		return
+	}
 
 	http.ListenAndServe(":8080", nil)
 	fmt.Println("server is listening")
