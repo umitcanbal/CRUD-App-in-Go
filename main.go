@@ -24,7 +24,6 @@ type ErrorResponse struct {
 	Error string
 }
 
-var usersSlice UsersSlice
 var db *sql.DB
 
 func createErrorResponse(err error) ErrorResponse {
@@ -97,14 +96,14 @@ func createUser(writer http.ResponseWriter, req *http.Request) {
 	_ = json.NewEncoder(writer).Encode(newUser)
 }
 
-func findUserIndex(users UsersSlice, userId int) (bool, int) {
-	for index, user := range users {
+func userExists(users UsersSlice, userId int) bool {
+	for _, user := range users {
 		if user.ID == userId {
-			return true, index
+			return true
 		}
 	}
 
-	return false, -1
+	return false
 }
 
 func deleteUser(writer http.ResponseWriter, req *http.Request) {
@@ -121,7 +120,7 @@ func deleteUser(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	var usersSlice = fetchUsers()
-	found, _ := findUserIndex(usersSlice, id)
+	found := userExists(usersSlice, id)
 
 	if !found {
 		writer.WriteHeader(http.StatusNotFound)
@@ -147,7 +146,8 @@ func updateUser(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	found, userIndex := findUserIndex(usersSlice, updateUser.ID)
+	var usersSlice = fetchUsers()
+	found := userExists(usersSlice, updateUser.ID)
 	if !found {
 		writer.WriteHeader(http.StatusNotFound)
 		err := fmt.Errorf("There is no user with id %d", updateUser.ID)
@@ -155,7 +155,7 @@ func updateUser(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	usersSlice[userIndex] = updateUser
+	db.Exec("UPDATE users SET name = $1, age = $2 WHERE id = $3", updateUser.Name, updateUser.Age, updateUser.ID)
 	_ = json.NewEncoder(writer).Encode(updateUser)
 }
 
