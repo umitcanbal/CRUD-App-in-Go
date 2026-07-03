@@ -106,12 +106,37 @@ func deleteUser(writer http.ResponseWriter, req *http.Request) {
 	_ = json.NewEncoder(writer).Encode(map[string]string{"message": fmt.Sprintf("User with id %d is deleted", id)})
 }
 
+func updateUser(writer http.ResponseWriter, req *http.Request) {
+	writer.Header().Set("Content-Type", "application/json")
+
+	var updateUser User
+
+	err := json.NewDecoder(req.Body).Decode(&updateUser)
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(writer).Encode(createErrorResponse(err))
+		return
+	}
+
+	found, userIndex := findUserIndex(usersSlice, updateUser.ID)
+	if !found {
+		writer.WriteHeader(http.StatusNotFound)
+		err := fmt.Errorf("There is no user with id %d", updateUser.ID)
+		json.NewEncoder(writer).Encode(createErrorResponse(err))
+		return
+	}
+
+	usersSlice[userIndex] = updateUser
+	_ = json.NewEncoder(writer).Encode(updateUser)
+}
+
 func main() {
 	fmt.Print("started\n")
 
 	http.HandleFunc("POST /createuser", createUser)
 	http.HandleFunc("DELETE /deleteuser/{userId}", deleteUser)
 	http.HandleFunc("GET /getusers", getUsers)
+	http.HandleFunc("PUT /updateuser", updateUser)
 
 	http.ListenAndServe(":8080", nil)
 	fmt.Println("server is listening")
